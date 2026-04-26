@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* Windows 98 themed game global styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: teal;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+}
+
+#root {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* Feedback flash animations */
+@keyframes flashGreen {
+  0%   { background-color: rgba(0, 255, 0, 0.35); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flashRed {
+  0%   { background-color: rgba(255, 0, 0, 0.35); }
+  100% { background-color: transparent; }
+}
+
+.feedback-correct {
+  animation: flashGreen 0.5s ease-out;
+}
+
+.feedback-wrong {
+  animation: flashRed 0.5s ease-out;
+}
+
+/* Countdown progress bar */
+.timer-bar {
+  transition: width 0.1s linear;
+}
+
+/* Number display styling */
+.number-display {
+  font-size: 2.5rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  font-family: "Courier New", Courier, monospace;
+}
+
+/* Keypad button active state */
+.keypad-btn:active {
+  transform: scale(0.95);
+}
+
