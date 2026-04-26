@@ -17,6 +17,12 @@ export interface GameState {
   feedback: FeedbackState;
   /** Whether a round is currently active */
   isActive: boolean;
+  /** Whether the current round is paused */
+  isPaused: boolean;
+  /** Whether user must manually continue after a correct answer */
+  isWaitingForNext: boolean;
+  /** Monotonic id used to reset timer for each round */
+  roundId: number;
 }
 
 /** Props for the Display component */
@@ -26,6 +32,7 @@ export interface DisplayProps {
   totalTime: number;
   input: string;
   feedback: FeedbackState;
+  isPaused: boolean;
 }
 
 /** Props for the Keypad component */

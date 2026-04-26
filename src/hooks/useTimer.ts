@@ -14,6 +14,9 @@ export function useTimer(
   onTick: (remaining: number) => void,
   onExpire: () => void,
   active: boolean,
+  paused: boolean,
+  waitingForNext: boolean,
+  resetSignal: number,
 ): void {
   const onTickRef = useRef(onTick);
   const onExpireRef = useRef(onExpire);
@@ -22,8 +25,8 @@ export function useTimer(
   useEffect(() => { onTickRef.current = onTick; }, [onTick]);
   useEffect(() => { onExpireRef.current = onExpire; }, [onExpire]);
 
-  const startTimeRef = useRef<number>(0);
   const remainingRef = useRef<number>(duration);
+  const lastTickTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stop = useCallback(() => {
@@ -34,19 +37,28 @@ export function useTimer(
   }, []);
 
   useEffect(() => {
-    if (!active) {
+    // Reset timer values when a new round starts.
+    remainingRef.current = duration;
+    lastTickTimeRef.current = null;
+    onTickRef.current(duration);
+  }, [duration, resetSignal]);
+
+  useEffect(() => {
+    if (!active || paused || waitingForNext) {
       stop();
+      lastTickTimeRef.current = null;
       return;
     }
 
-    // Reset state for new round
-    startTimeRef.current = Date.now();
-    remainingRef.current = duration;
+    lastTickTimeRef.current = Date.now();
 
     intervalRef.current = setInterval(() => {
-      const elapsed = (Date.now() - startTimeRef.current) / 1000;
-      const newRemaining = Math.max(0, duration - elapsed);
+      const now = Date.now();
+      const lastTick = lastTickTimeRef.current ?? now;
+      const elapsed = (now - lastTick) / 1000;
+      const newRemaining = Math.max(0, remainingRef.current - elapsed);
 
+      lastTickTimeRef.current = now;
       remainingRef.current = newRemaining;
       onTickRef.current(newRemaining);
 
@@ -58,5 +70,5 @@ export function useTimer(
 
     return stop;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, duration]);
+  }, [active, paused, waitingForNext, stop]);
 }

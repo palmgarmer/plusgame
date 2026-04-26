@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React from 'react';
 import type { KeypadProps } from '../types';
 
 /** Keys in layout order (3×4 grid like an old phone pad) */
@@ -9,42 +9,14 @@ const KEYPAD_LAYOUT: string[][] = [
   ['*', '0', '#'],
 ];
 
-/** Physical keyboard keys that map to keypad actions */
-const KEYBOARD_MAP: Record<string, string> = {
-  '0': '0', '1': '1', '2': '2', '3': '3', '4': '4',
-  '5': '5', '6': '6', '7': '7', '8': '8', '9': '9',
-  'Numpad0': '0', 'Numpad1': '1', 'Numpad2': '2', 'Numpad3': '3',
-  'Numpad4': '4', 'Numpad5': '5', 'Numpad6': '6', 'Numpad7': '7',
-  'Numpad8': '8', 'Numpad9': '9',
-  'Backspace': '*',
-  'Enter': '#',
-};
-
 /**
  * 3×4 phone-style keypad.
  *  - Digits 0-9 append to the input
  *  - '*' acts as backspace / clear
  *  - '#' acts as submit / enter
- * Supports both mouse clicks and physical keyboard (number row + numpad).
+ * Supports mouse/touch clicks. Keyboard shortcuts are handled by App.
  */
 const Keypad: React.FC<KeypadProps> = ({ onKey, disabled }) => {
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (disabled) return;
-      const mapped = KEYBOARD_MAP[e.key] ?? KEYBOARD_MAP[e.code];
-      if (mapped !== undefined) {
-        e.preventDefault();
-        onKey(mapped);
-      }
-    },
-    [disabled, onKey],
-  );
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
-
   return (
     <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
       {KEYPAD_LAYOUT.flat().map((key) => {
@@ -65,7 +37,7 @@ const Keypad: React.FC<KeypadProps> = ({ onKey, disabled }) => {
               minWidth: '56px',
             }}
           >
-            {key === '*' ? '⌫' : key === '#' ? '↵' : key}
+            {key === '*' ? 'c' : key === '#' ? '#' : key}
           </button>
         );
       })}

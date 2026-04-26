@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import '98.css';
-import { Trophy, RefreshCw } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import Display from './components/Display';
 import Keypad from './components/Keypad';
 import { useTimer } from './hooks/useTimer';
@@ -41,6 +41,9 @@ function initialState(): GameState {
     highScore: loadHighScore(),
     feedback: null,
     isActive: true,
+    isPaused: false,
+    isWaitingForNext: false,
+    roundId: 1,
   };
 }
 
@@ -61,6 +64,9 @@ const App: React.FC = () => {
       timeLeft: ROUND_DURATION,
       feedback: null,
       isActive: true,
+      isPaused: false,
+      isWaitingForNext: false,
+      roundId: prev.roundId + 1,
     }));
   }, []);
 
@@ -73,14 +79,13 @@ const App: React.FC = () => {
       return {
         ...prev,
         isActive: false,
+        isPaused: false,
+        isWaitingForNext: true,
         feedback: fb,
         score: newScore,
         highScore: newHigh,
       };
     });
-
-    // Auto-advance to next round after brief feedback display
-    feedbackTimerRef.current = setTimeout(startRound, 800);
   }, [startRound]);
 
   /** Timer tick – update displayed time */
@@ -90,14 +95,35 @@ const App: React.FC = () => {
 
   /** Timer expired – mark as timeout */
   const handleExpire = useCallback(() => {
-    resolveRound('timeout', false);
-  }, [resolveRound]);
+    const typedGuess = state.input.length > 0 ? parseInt(state.input, 10) : NaN;
+    const answer = state.numbers.reduce((a, b) => a + b, 0);
+    const typedIsCorrect = Number.isFinite(typedGuess) && typedGuess === answer;
 
-  useTimer(ROUND_DURATION, handleTick, handleExpire, state.isActive);
+    // Show correct-style feedback if the typed value matches on timeout,
+    // but keep scoring behavior the same: only Enter before timeout submits.
+    resolveRound(typedIsCorrect ? 'correct' : 'timeout', false);
+  }, [resolveRound, state.input, state.numbers]);
+
+  useTimer(
+    ROUND_DURATION,
+    handleTick,
+    handleExpire,
+    state.isActive,
+    state.isPaused,
+    state.isWaitingForNext,
+    state.roundId,
+  );
+
+  const togglePause = useCallback(() => {
+    setState((prev) => {
+      if (!prev.isActive || prev.timeLeft <= 0) return prev;
+      return { ...prev, isPaused: !prev.isPaused };
+    });
+  }, []);
 
   /** Handle a keypad / keyboard key press */
   const handleKey = useCallback((key: string) => {
-    if (!state.isActive) return;
+    if (!state.isActive || state.isPaused) return;
 
     if (key === '*') {
       // Backspace / clear
@@ -121,7 +147,45 @@ const App: React.FC = () => {
         return { ...prev, input: prev.input + key };
       });
     }
-  }, [state.isActive, state.input, state.numbers, resolveRound]);
+  }, [state.isActive, state.isPaused, state.input, state.numbers, resolveRound]);
+
+  // Global keyboard support:
+  // - Space: pause/resume, or start next round after any completed round
+  // - Digits: input answer
+  // - Enter: submit
+  // - Backspace: clear one digit
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (state.isWaitingForNext && !state.isActive) {
+          startRound();
+          return;
+        }
+        togglePause();
+        return;
+      }
+
+      const mapped =
+        /^\d$/.test(e.key)
+          ? e.key
+          : /^Numpad\d$/.test(e.code)
+            ? e.code.replace('Numpad', '')
+            : e.key === 'Enter'
+              ? '#'
+              : e.key === 'Backspace'
+                ? '*'
+                : null;
+
+      if (mapped !== null) {
+        e.preventDefault();
+        handleKey(mapped);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleKey, togglePause, startRound, state.isWaitingForNext, state.feedback]);
 
   // Clean up feedback timer on unmount
   useEffect(() => {
@@ -162,6 +226,19 @@ const App: React.FC = () => {
 
         {/* Main game body */}
         <div className="window-body" style={{ padding: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '0.75rem' }}>
+              Time: {state.timeLeft.toFixed(1)}s
+            </span>
+            <button
+              onClick={togglePause}
+              disabled={!state.isActive || state.timeLeft <= 0}
+              style={{ fontSize: '0.75rem', minWidth: '68px' }}
+            >
+              {state.isPaused ? 'Resume' : 'Pause'}
+            </button>
+          </div>
+
           {/* Display area */}
           <Display
             numbers={state.numbers}
@@ -169,6 +246,7 @@ const App: React.FC = () => {
             totalTime={ROUND_DURATION}
             input={state.input}
             feedback={state.feedback}
+            isPaused={state.isPaused}
           />
 
           {/* Feedback message */}
@@ -194,24 +272,32 @@ const App: React.FC = () => {
 
           {/* Keypad */}
           <div className="mt-2">
-            <Keypad onKey={handleKey} disabled={!state.isActive} />
+            <Keypad onKey={handleKey} disabled={!state.isActive || state.isPaused} />
           </div>
 
-          {/* Manual restart */}
-          <div className="flex justify-center mt-2">
-            <button
-              onClick={startRound}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
-            >
-              <RefreshCw size={14} /> New Round
-            </button>
-          </div>
+          {/* Manual next round after any completed round */}
+          {state.isWaitingForNext && (
+            <div className="flex justify-center mt-2">
+              <button
+                onClick={startRound}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+              >
+                New Round
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Status bar */}
         <div className="status-bar">
           <p className="status-bar-field" style={{ fontSize: '0.75rem' }}>
-            {state.isActive ? 'Round in progress…' : 'Waiting for next round…'}
+            {state.isPaused
+              ? 'Paused'
+              : state.isWaitingForNext
+                ? 'Round complete. Click Next Round or press Space to continue.'
+                : state.isActive
+                  ? 'Round in progress…'
+                  : 'Waiting for next round…'}
           </p>
           <p className="status-bar-field" style={{ fontSize: '0.75rem' }}>
             Add all 4 numbers and enter the sum
