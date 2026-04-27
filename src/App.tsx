@@ -264,6 +264,12 @@ const App: React.FC = () => {
   }, []);
 
   const correct = state.numbers.reduce((a, b) => a + b, 0);
+  const themeIcon = {
+    win98: <img src="icon/paint_98.webp" width={15} alt="98" />,
+    winxp: <img src="icon/paint_xp.webp" width={15} alt="XP" />,
+    win7: <img src="icon/paint_7.webp" width={15} alt="7" />,
+    macos: <img src="icon/MacPaint.webp" width={15} alt="Mac" />,
+  }[activeTheme.id];
 
   // -----------------------------------------------------------------------
   // Render
@@ -426,7 +432,7 @@ const App: React.FC = () => {
                   title="Switch theme"
                   style={{ fontSize: '0.7rem', minWidth: 'unset', padding: '0 5px', height: '18px', lineHeight: 1, flexShrink: 0 }}
                 >
-                  {activeTheme.id === 'win98' ? <img src="icon/paint_98.webp" width={15} alt="98" /> : activeTheme.id === 'winxp' ? <img src="icon/paint_xp.webp" width={15} alt="XP" /> : activeTheme.id === 'win7' ? <img src="icon/paint_7.webp" width={15} alt="7" /> : <img src="icon/MacPaint.webp" width={15} alt="Mac" />}
+                  {themeIcon}
                 </button>
               )}
             </p>
