@@ -47,7 +47,7 @@ const ThemeSwitcherDialog: React.FC<ThemeSwitcherDialogProps> = ({
       >
         <div className="title-bar">
           <div className="title-bar-text" id="switcher-title">
-            🎨 Theme Gallery
+            Theme Gallery
           </div>
           <div className="title-bar-controls">
             <button aria-label="Close" onClick={onClose} />

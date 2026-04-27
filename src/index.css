@@ -57,10 +57,11 @@ body.theme-fading {
 }
 
 /* ── XP theme: title-bar height fix ──────────────────────────────────────── */
-/* xp.css sets height:21px with 3px top+bottom padding, but the control       */
-/* buttons have min-height:21px, so they overflow. Let the bar size to content.*/
+/* xp.css hard-codes height:21px but buttons have min-height:21px, so they    */
+/* overflow. Override with a taller fixed height.                               */
 body.xp .title-bar {
-  height: auto;
+  height: 30px !important;
+  overflow: visible;
 }
 
 /* ── Reward dialog preview isolation ─────────────────────────────────────── */
