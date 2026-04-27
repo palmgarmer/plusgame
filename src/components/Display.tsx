@@ -81,7 +81,7 @@ const Display: React.FC<DisplayProps> = ({
         />
       </div>
       <div className="text-center" style={{ fontSize: '0.75rem', color: '#444' }}>
-        {isPaused ? 'Paused' : `${timeLeft.toFixed(1)}s`}
+        {isPaused ? 'Paused' : `Time: ${timeLeft.toFixed(1)}s`}
       </div>
     </div>
   );

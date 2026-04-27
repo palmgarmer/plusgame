@@ -23,6 +23,8 @@ export interface GameState {
   isWaitingForNext: boolean;
   /** Monotonic id used to reset timer for each round */
   roundId: number;
+  /** Cumulative time used across correct rounds in the current streak (seconds) */
+  recordTime: number;
 }
 
 /** Props for the Display component */

@@ -44,6 +44,7 @@ function initialState(): GameState {
     isPaused: false,
     isWaitingForNext: false,
     roundId: 1,
+    recordTime: 0,
   };
 }
 
@@ -76,6 +77,8 @@ const App: React.FC = () => {
       const newScore = isCorrect ? prev.score + 1 : 0;
       const newHigh = Math.max(newScore, prev.highScore);
       if (newHigh > prev.highScore) saveHighScore(newHigh);
+      const timeUsed = ROUND_DURATION - prev.timeLeft;
+      const newRecordTime = isCorrect ? prev.recordTime + timeUsed : 0;
       return {
         ...prev,
         isActive: false,
@@ -84,6 +87,7 @@ const App: React.FC = () => {
         feedback: fb,
         score: newScore,
         highScore: newHigh,
+        recordTime: newRecordTime,
       };
     });
   }, [startRound]);
@@ -99,9 +103,8 @@ const App: React.FC = () => {
     const answer = state.numbers.reduce((a, b) => a + b, 0);
     const typedIsCorrect = Number.isFinite(typedGuess) && typedGuess === answer;
 
-    // Show correct-style feedback if the typed value matches on timeout,
-    // but keep scoring behavior the same: only Enter before timeout submits.
-    resolveRound(typedIsCorrect ? 'correct' : 'timeout', false);
+    // Award score if the typed value matches at timeout, same as pressing Enter in time.
+    resolveRound(typedIsCorrect ? 'correct' : 'timeout', typedIsCorrect);
   }, [resolveRound, state.input, state.numbers]);
 
   useTimer(
@@ -140,12 +143,15 @@ const App: React.FC = () => {
       return;
     }
 
-    // Digit key: append (max MAX_INPUT_LENGTH digits)
+    // Digit key: append, then auto-submit if the new input is the correct answer
     if (/^\d$/.test(key)) {
-      setState((prev) => {
-        if (prev.input.length >= MAX_INPUT_LENGTH) return prev;
-        return { ...prev, input: prev.input + key };
-      });
+      if (state.input.length >= MAX_INPUT_LENGTH) return;
+      const newInput = state.input + key;
+      setState((prev) => ({ ...prev, input: newInput }));
+      const answer = state.numbers.reduce((a, b) => a + b, 0);
+      if (parseInt(newInput, 10) === answer) {
+        resolveRound('correct', true);
+      }
     }
   }, [state.isActive, state.isPaused, state.input, state.numbers, resolveRound]);
 
@@ -228,7 +234,7 @@ const App: React.FC = () => {
         <div className="window-body" style={{ padding: '8px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.75rem' }}>
-              Time: {state.timeLeft.toFixed(1)}s
+              Record: {state.recordTime.toFixed(1)}s
             </span>
             <button
               onClick={togglePause}
@@ -282,7 +288,7 @@ const App: React.FC = () => {
                 onClick={startRound}
                 style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
               >
-                New Round
+                Next Round
               </button>
             </div>
           )}
