@@ -42,6 +42,38 @@ body {
   animation: flashRed 0.5s ease-out;
 }
 
+/* ── Theme transition ─────────────────────────────────────────────────────── */
+body {
+  transition: opacity 0.2s ease;
+}
+
+body.theme-fading {
+  opacity: 0;
+}
+
+@keyframes plusgame-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── XP theme: title-bar height fix ──────────────────────────────────────── */
+/* xp.css sets height:21px with 3px top+bottom padding, but the control       */
+/* buttons have min-height:21px, so they overflow. Let the bar size to content.*/
+body.xp .title-bar {
+  height: auto;
+}
+
+/* ── Reward dialog preview isolation ─────────────────────────────────────── */
+/* Prevent the preview wrapper's new-theme link from leaking into the game */
+.reward-preview {
+  all: initial;
+  display: block;
+}
+
+.reward-preview * {
+  font-family: inherit;
+}
+
 /* Countdown progress bar */
 .timer-bar {
   transition: width 0.1s linear;
