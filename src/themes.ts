@@ -4,8 +4,6 @@ export type ThemeId = 'win98' | 'winxp' | 'win7' | 'macos';
 export interface ThemeDefinition {
   id: ThemeId;
   name: string;
-  /** CDN URL for the CSS library (null = bundled 98.css) */
-  cssUrl: string | null;
   /** Streak count that unlocks this theme */
   unlockStreak: number;
   /** Short flavour text shown in the reward dialog */
@@ -18,7 +16,6 @@ export const THEMES: ThemeDefinition[] = [
   {
     id: 'win98',
     name: 'Windows 98',
-    cssUrl: null,
     unlockStreak: 0,
     tagline: 'The classic.',
     previewBg: '#008080',
@@ -26,7 +23,6 @@ export const THEMES: ThemeDefinition[] = [
   {
     id: 'winxp',
     name: 'Windows XP',
-    cssUrl: 'https://unpkg.com/xp.css/dist/XP.css',
     unlockStreak: 3,
     tagline: 'Welcome to the 21st century!',
     previewBg: '#235bce',
@@ -34,7 +30,6 @@ export const THEMES: ThemeDefinition[] = [
   {
     id: 'win7',
     name: 'Windows 7',
-    cssUrl: 'https://unpkg.com/7.css/dist/7.css',
     unlockStreak: 5,
     tagline: 'Aero glass — feel the breeze.',
     previewBg: '#1f4e99',
@@ -42,7 +37,6 @@ export const THEMES: ThemeDefinition[] = [
   {
     id: 'macos',
     name: 'Classic Mac OS',
-    cssUrl: 'https://unpkg.com/@sakun/system.css',
     unlockStreak: 10,
     tagline: 'Think different.',
     previewBg: '#6e6e6e',

@@ -37,6 +37,7 @@ export interface DisplayProps {
   input: string;
   feedback: FeedbackState;
   isPaused: boolean;
+  answer: number;
 }
 
 /** Props for the Keypad component */

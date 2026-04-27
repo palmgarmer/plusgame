@@ -8,13 +8,14 @@ import {
   loadMaxThemeId,
   saveMaxThemeId,
 } from '../themes';
+import { loadThemeCss } from '../themeCss';
 
-const LINK_ID = 'plusgame-theme-css';
+const STYLE_ID = 'plusgame-theme-css';
 
 /**
  * Manages dynamic CSS theme swapping.
- * - win98 uses the bundled 98.css (imported in main.tsx); the dynamic link is removed.
- * - All other themes are loaded via a <link> tag injected into <head>.
+ * - win98 uses the bundled 98.css (imported in main.tsx); the dynamic style is removed.
+ * - All other themes inject a <style> tag with CSS bundled via Vite ?inline imports.
  * - A CSS class `theme-fading` is applied to <body> during the swap for a fade transition.
  */
 export function useTheme() {
@@ -24,7 +25,7 @@ export function useTheme() {
 
   // Apply theme on mount and whenever it changes
   useEffect(() => {
-    applyThemeCss(activeThemeId);
+    void applyThemeCss(activeThemeId);
   }, [activeThemeId]);
 
   const applyTheme = useCallback(
@@ -38,8 +39,8 @@ export function useTheme() {
       const willUpdateMax = newThemeDef.unlockStreak >= maxThemeDef.unlockStreak;
       if (willUpdateMax) saveMaxThemeId(id);
 
-      const doSwap = () => {
-        applyThemeCss(id);
+      const doSwap = async () => {
+        await applyThemeCss(id);
         setActiveThemeId(id);
         if (willUpdateMax) setMaxThemeId(id);
       };
@@ -48,15 +49,16 @@ export function useTheme() {
         fadingRef.current = true;
         document.body.classList.add('theme-fading');
         setTimeout(() => {
-          doSwap();
-          // Use setTimeout instead of rAF so it fires even in throttled/backgrounded contexts
-          setTimeout(() => {
-            document.body.classList.remove('theme-fading');
-            fadingRef.current = false;
-          }, 50);
+          void doSwap().then(() => {
+            // Use setTimeout instead of rAF so it fires even in throttled/backgrounded contexts
+            setTimeout(() => {
+              document.body.classList.remove('theme-fading');
+              fadingRef.current = false;
+            }, 50);
+          });
         }, 200); // matches the CSS transition duration
       } else {
-        doSwap();
+        void doSwap();
       }
     },
     [maxThemeId],
@@ -71,31 +73,30 @@ export function useTheme() {
 // ---------------------------------------------------------------------------
 // Pure DOM helper – no React state
 // ---------------------------------------------------------------------------
-function applyThemeCss(id: ThemeId) {
-  const def = THEMES.find((t) => t.id === id)!;
-  let link = document.getElementById(LINK_ID) as HTMLLinkElement | null;
+async function applyThemeCss(id: ThemeId) {
+  let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
 
-  if (def.cssUrl === null) {
-    // Win98: remove the dynamic link so bundled 98.css takes effect
-    link?.remove();
-    // Remove any lingering xp / 7 / system body classes
-    document.body.className = document.body.className
-      .replace(/\bxp\b|\bwin7\b|\bsystem-css\b/g, '')
-      .trim();
-    return;
-  }
-
-  if (!link) {
-    link = document.createElement('link');
-    link.id = LINK_ID;
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
-  }
-  link.href = def.cssUrl;
-
-  // xp.css requires a body class; 7.css and system.css do not
+  // Remove any lingering xp / 7 / system body classes
   document.body.className = document.body.className
     .replace(/\bxp\b|\bwin7\b|\bsystem-css\b/g, '')
     .trim();
+
+  if (id === 'win98') {
+    // Win98: remove the injected style so bundled 98.css takes effect
+    style?.remove();
+    return;
+  }
+
+  const css = await loadThemeCss(id);
+  if (!css) return;
+
+  if (!style) {
+    style = document.createElement('style');
+    style.id = STYLE_ID;
+    document.head.appendChild(style);
+  }
+  style.textContent = css;
+
+  // xp.css requires a body class; 7.css and system.css do not
   if (id === 'winxp') document.body.classList.add('xp');
 }

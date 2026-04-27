@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import type { ThemeDefinition } from '../themes';
+import { loadThemeCss } from '../themeCss';
 
 interface ThemeRewardDialogProps {
   theme: ThemeDefinition;
@@ -7,12 +8,12 @@ interface ThemeRewardDialogProps {
   onDismiss: () => void;
 }
 
-const PREVIEW_LINK_ID = 'plusgame-theme-preview';
+const PREVIEW_STYLE_ID = 'plusgame-theme-preview';
 
 /**
  * Congratulations dialog shown when a new theme is unlocked.
- * Loads the new theme's CSS globally as a live preview while the dialog
- * is open. The preview link is removed if the player dismisses.
+ * Injects the new theme's CSS as a live preview while the dialog
+ * is open. The preview style is removed if the player dismisses.
  */
 const ThemeRewardDialog: React.FC<ThemeRewardDialogProps> = ({
   theme,
@@ -23,24 +24,26 @@ const ThemeRewardDialog: React.FC<ThemeRewardDialogProps> = ({
 
   // Inject the new theme CSS for a live preview; clean up on unmount
   useEffect(() => {
-    if (theme.cssUrl) {
-      let link = document.getElementById(PREVIEW_LINK_ID) as HTMLLinkElement | null;
-      if (!link) {
-        link = document.createElement('link');
-        link.id = PREVIEW_LINK_ID;
-        link.rel = 'stylesheet';
-        document.head.appendChild(link);
+    let cancelled = false;
+    void loadThemeCss(theme.id).then((css) => {
+      if (cancelled || !css) return;
+      let style = document.getElementById(PREVIEW_STYLE_ID) as HTMLStyleElement | null;
+      if (!style) {
+        style = document.createElement('style');
+        style.id = PREVIEW_STYLE_ID;
+        document.head.appendChild(style);
       }
-      link.href = theme.cssUrl;
+      style.textContent = css;
       // xp.css scopes its selectors under body.xp
       if (theme.id === 'winxp') document.body.classList.add('xp');
-    }
+    });
 
     return () => {
-      document.getElementById(PREVIEW_LINK_ID)?.remove();
+      cancelled = true;
+      document.getElementById(PREVIEW_STYLE_ID)?.remove();
       document.body.classList.remove('xp');
     };
-  }, [theme.cssUrl, theme.id]);
+  }, [theme.id]);
 
   // Focus first button on mount
   useEffect(() => {

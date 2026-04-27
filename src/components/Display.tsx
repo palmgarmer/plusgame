@@ -12,6 +12,7 @@ const Display: React.FC<DisplayProps> = ({
   input,
   feedback,
   isPaused,
+  answer,
 }) => {
   const progressPct = (timeLeft / totalTime) * 100;
 
@@ -80,8 +81,23 @@ const Display: React.FC<DisplayProps> = ({
           }}
         />
       </div>
-      <div className="text-center" style={{ fontSize: '0.75rem', color: '#444' }}>
-        {isPaused ? 'Paused' : `Time: ${timeLeft.toFixed(1)}s`}
+      <div
+        className="text-center"
+        style={{
+          fontSize: '0.75rem',
+          fontWeight: feedback ? 'bold' : undefined,
+          color: feedback === 'correct' ? 'green' : feedback ? 'red' : '#444',
+        }}
+      >
+        {feedback === 'correct'
+          ? '✓ Correct!'
+          : feedback === 'timeout'
+            ? `⏱ Time! Answer was ${answer}`
+            : feedback === 'wrong'
+              ? `✗ Wrong! Answer was ${answer}`
+              : isPaused
+                ? 'Paused'
+                : `Time: ${timeLeft.toFixed(1)}s`}
       </div>
     </div>
   );
