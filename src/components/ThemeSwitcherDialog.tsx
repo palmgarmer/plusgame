@@ -42,7 +42,7 @@ const ThemeSwitcherDialog: React.FC<ThemeSwitcherDialogProps> = ({
       }}
     >
       <div
-        className="window"
+        className="window active"
         style={{ width: '300px', maxWidth: '92vw' }}
       >
         <div className="title-bar">
