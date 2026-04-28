@@ -25,6 +25,8 @@ export interface GameState {
   roundId: number;
   /** Cumulative time used across correct rounds in the current streak (seconds) */
   recordTime: number;
+  /** Current correct-answer streak count */
+  streak: number;
 }
 
 /** Props for the Display component */
@@ -35,6 +37,7 @@ export interface DisplayProps {
   input: string;
   feedback: FeedbackState;
   isPaused: boolean;
+  answer: number;
 }
 
 /** Props for the Keypad component */

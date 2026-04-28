@@ -1,14 +1,18 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import '98.css';
-import { Trophy } from 'lucide-react';
-import Display from './components/Display';
-import Keypad from './components/Keypad';
-import { useTimer } from './hooks/useTimer';
-import type { GameState, FeedbackState } from './types';
+﻿import React, { useState, useCallback, useEffect, useRef } from "react";
+import "98.css";
+import { Trophy } from "lucide-react";
+import Display from "./components/Display";
+import Keypad from "./components/Keypad";
+import ThemeRewardDialog from "./components/ThemeRewardDialog";
+import ThemeSwitcherDialog from "./components/ThemeSwitcherDialog";
+import { useTimer } from "./hooks/useTimer";
+import { useTheme } from "./hooks/useTheme";
+import type { GameState, FeedbackState } from "./types";
+import { getThemeForStreak, type ThemeDefinition } from "./themes";
 
 // ---------- constants ----------
 const ROUND_DURATION = 3; // seconds
-const LS_HIGH_SCORE_KEY = 'plusgame_highscore';
+const LS_HIGH_SCORE_KEY = "plusgame_highscore";
 const MAX_INPUT_LENGTH = 2;
 
 // ---------- helpers ----------
@@ -18,7 +22,7 @@ function generateNumbers(): number[] {
 
 function loadHighScore(): number {
   try {
-    return parseInt(localStorage.getItem(LS_HIGH_SCORE_KEY) ?? '0', 10) || 0;
+    return parseInt(localStorage.getItem(LS_HIGH_SCORE_KEY) ?? "0", 10) || 0;
   } catch {
     return 0;
   }
@@ -28,14 +32,14 @@ function saveHighScore(hs: number): void {
   try {
     localStorage.setItem(LS_HIGH_SCORE_KEY, String(hs));
   } catch {
-    // localStorage may be unavailable in some environments
+    // ignore
   }
 }
 
 function initialState(): GameState {
   return {
     numbers: generateNumbers(),
-    input: '',
+    input: "",
     timeLeft: ROUND_DURATION,
     score: 0,
     highScore: loadHighScore(),
@@ -45,6 +49,7 @@ function initialState(): GameState {
     isWaitingForNext: false,
     roundId: 1,
     recordTime: 0,
+    streak: 0,
   };
 }
 
@@ -52,16 +57,32 @@ function initialState(): GameState {
 const App: React.FC = () => {
   const [state, setState] = useState<GameState>(initialState);
 
-  // Feedback timeout ref so we can clear it before starting a new round
+  // Theme system
+  const { activeTheme, maxTheme, applyTheme, unlockTheme } = useTheme();
+
+  // Reward dialog state: null = hidden, else the theme to preview
+  const [pendingReward, setPendingReward] = useState<ThemeDefinition | null>(
+    null,
+  );
+
+  // Theme switcher dialog
+  const [showThemeSwitcher, setShowThemeSwitcher] = useState(false);
+
+  // Track the highest streak threshold we've already rewarded (seed from max unlocked)
+  const lastTriggeredStreakRef = useRef(maxTheme.unlockStreak);
+
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /** Start a fresh round */
+  // -----------------------------------------------------------------------
+  // Round management
+  // -----------------------------------------------------------------------
+
   const startRound = useCallback(() => {
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
     setState((prev) => ({
       ...prev,
       numbers: generateNumbers(),
-      input: '',
+      input: "",
       timeLeft: ROUND_DURATION,
       feedback: null,
       isActive: true,
@@ -71,7 +92,6 @@ const App: React.FC = () => {
     }));
   }, []);
 
-  /** Resolve a round with the given feedback and update score / high score */
   const resolveRound = useCallback((fb: FeedbackState, isCorrect: boolean) => {
     setState((prev) => {
       const newScore = isCorrect ? prev.score + 1 : 0;
@@ -79,6 +99,7 @@ const App: React.FC = () => {
       if (newHigh > prev.highScore) saveHighScore(newHigh);
       const timeUsed = ROUND_DURATION - prev.timeLeft;
       const newRecordTime = isCorrect ? prev.recordTime + timeUsed : 0;
+      const newStreak = isCorrect ? prev.streak + 1 : 0;
       return {
         ...prev,
         isActive: false,
@@ -88,31 +109,65 @@ const App: React.FC = () => {
         score: newScore,
         highScore: newHigh,
         recordTime: newRecordTime,
+        streak: newStreak,
       };
     });
-  }, [startRound]);
+  }, []);
 
-  /** Timer tick – update displayed time */
+  // Detect streak milestones after React has committed the new state.
+  // Using useEffect guarantees we read the committed streak value.
+  useEffect(() => {
+    if (
+      state.feedback === "correct" &&
+      state.streak > lastTriggeredStreakRef.current
+    ) {
+      const reward = getThemeForStreak(state.streak);
+      if (reward) {
+        lastTriggeredStreakRef.current = state.streak;
+        setPendingReward((prev) => (prev ? prev : reward));
+      }
+    }
+  }, [state.streak, state.feedback]);
+
+  // -----------------------------------------------------------------------
+  // Reward dialog handlers
+  // -----------------------------------------------------------------------
+
+  const handleApplyReward = useCallback(() => {
+    if (!pendingReward) return;
+    applyTheme(pendingReward.id);
+    setPendingReward(null);
+  }, [pendingReward, applyTheme]);
+
+  const handleDismissReward = useCallback(() => {
+    if (pendingReward) unlockTheme(pendingReward.id);
+    setPendingReward(null);
+  }, [pendingReward, unlockTheme]);
+
+  // -----------------------------------------------------------------------
+  // Timer
+  // -----------------------------------------------------------------------
+
   const handleTick = useCallback((remaining: number) => {
     setState((prev) => ({ ...prev, timeLeft: remaining }));
   }, []);
 
-  /** Timer expired – mark as timeout */
   const handleExpire = useCallback(() => {
     const typedGuess = state.input.length > 0 ? parseInt(state.input, 10) : NaN;
     const answer = state.numbers.reduce((a, b) => a + b, 0);
     const typedIsCorrect = Number.isFinite(typedGuess) && typedGuess === answer;
-
-    // Award score if the typed value matches at timeout, same as pressing Enter in time.
-    resolveRound(typedIsCorrect ? 'correct' : 'timeout', typedIsCorrect);
+    resolveRound(typedIsCorrect ? "correct" : "timeout", typedIsCorrect);
   }, [resolveRound, state.input, state.numbers]);
+
+  const isTimerPaused =
+    state.isPaused || pendingReward !== null || showThemeSwitcher;
 
   useTimer(
     ROUND_DURATION,
     handleTick,
     handleExpire,
     state.isActive,
-    state.isPaused,
+    isTimerPaused,
     state.isWaitingForNext,
     state.roundId,
   );
@@ -124,46 +179,73 @@ const App: React.FC = () => {
     });
   }, []);
 
-  /** Handle a keypad / keyboard key press */
-  const handleKey = useCallback((key: string) => {
-    if (!state.isActive || state.isPaused) return;
+  // -----------------------------------------------------------------------
+  // Input handling
+  // -----------------------------------------------------------------------
 
-    if (key === '*') {
-      // Backspace / clear
-      setState((prev) => ({ ...prev, input: prev.input.slice(0, -1) }));
-      return;
-    }
+  const handleKey = useCallback(
+    (key: string) => {
+      if (
+        !state.isActive ||
+        state.isPaused ||
+        pendingReward ||
+        showThemeSwitcher
+      )
+        return;
 
-    if (key === '#') {
-      // Submit
-      if (state.input.length === 0) return;
-      const guess = parseInt(state.input, 10);
-      const answer = state.numbers.reduce((a, b) => a + b, 0);
-      resolveRound(guess === answer ? 'correct' : 'wrong', guess === answer);
-      return;
-    }
-
-    // Digit key: append, then auto-submit if the new input is the correct answer
-    if (/^\d$/.test(key)) {
-      if (state.input.length >= MAX_INPUT_LENGTH) return;
-      const newInput = state.input + key;
-      setState((prev) => ({ ...prev, input: newInput }));
-      const answer = state.numbers.reduce((a, b) => a + b, 0);
-      if (parseInt(newInput, 10) === answer) {
-        resolveRound('correct', true);
+      if (key === "*") {
+        setState((prev) => ({ ...prev, input: prev.input.slice(0, -1) }));
+        return;
       }
-    }
-  }, [state.isActive, state.isPaused, state.input, state.numbers, resolveRound]);
 
-  // Global keyboard support:
-  // - Space: pause/resume, or start next round after any completed round
-  // - Digits: input answer
-  // - Enter: submit
-  // - Backspace: clear one digit
+      if (key === "#") {
+        if (state.input.length === 0) return;
+        const guess = parseInt(state.input, 10);
+        const answer = state.numbers.reduce((a, b) => a + b, 0);
+        resolveRound(guess === answer ? "correct" : "wrong", guess === answer);
+        return;
+      }
+
+      if (/^\d$/.test(key)) {
+        if (state.input.length >= MAX_INPUT_LENGTH) return;
+        const newInput = state.input + key;
+        setState((prev) => ({ ...prev, input: newInput }));
+        const answer = state.numbers.reduce((a, b) => a + b, 0);
+        if (parseInt(newInput, 10) === answer) {
+          resolveRound("correct", true);
+        }
+      }
+    },
+    [
+      state.isActive,
+      state.isPaused,
+      state.input,
+      state.numbers,
+      resolveRound,
+      pendingReward,
+      showThemeSwitcher,
+    ],
+  );
+
+  // Global keyboard listener
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
+      if (e.key === "Escape") {
+        if (pendingReward) {
+          e.preventDefault();
+          handleDismissReward();
+          return;
+        }
+        if (showThemeSwitcher) {
+          e.preventDefault();
+          setShowThemeSwitcher(false);
+          return;
+        }
+      }
+
+      if (e.code === "Space") {
         e.preventDefault();
+        if (pendingReward || showThemeSwitcher) return;
         if (state.isWaitingForNext && !state.isActive) {
           startRound();
           return;
@@ -172,16 +254,15 @@ const App: React.FC = () => {
         return;
       }
 
-      const mapped =
-        /^\d$/.test(e.key)
-          ? e.key
-          : /^Numpad\d$/.test(e.code)
-            ? e.code.replace('Numpad', '')
-            : e.key === 'Enter'
-              ? '#'
-              : e.key === 'Backspace'
-                ? '*'
-                : null;
+      const mapped = /^\d$/.test(e.key)
+        ? e.key
+        : /^Numpad\d$/.test(e.code)
+          ? e.code.replace("Numpad", "")
+          : e.key === "Enter"
+            ? "#"
+            : e.key === "Backspace"
+              ? "*"
+              : null;
 
       if (mapped !== null) {
         e.preventDefault();
@@ -189,11 +270,20 @@ const App: React.FC = () => {
       }
     };
 
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleKey, togglePause, startRound, state.isWaitingForNext, state.feedback]);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    handleKey,
+    togglePause,
+    startRound,
+    state.isWaitingForNext,
+    state.isActive,
+    state.feedback,
+    pendingReward,
+    handleDismissReward,
+    showThemeSwitcher,
+  ]);
 
-  // Clean up feedback timer on unmount
   useEffect(() => {
     return () => {
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
@@ -201,116 +291,203 @@ const App: React.FC = () => {
   }, []);
 
   const correct = state.numbers.reduce((a, b) => a + b, 0);
+  const themeIcon = {
+    win98: <img src="icon/paint_98.webp" width={15} alt="98" />,
+    winxp: <img src="icon/paint_xp.webp" width={15} alt="XP" />,
+    win7: <img src="icon/paint_7.webp" width={15} alt="7" />,
+    macos: <img src="icon/MacPaint.webp" width={15} alt="Mac" />,
+  }[activeTheme.id];
+
+  // -----------------------------------------------------------------------
+  // Render
+  // -----------------------------------------------------------------------
 
   return (
-    <div
-      className="flex items-center justify-center"
-      style={{ minHeight: '100vh', padding: '16px' }}
-    >
-      {/* Windows 98 window container */}
-      <div className="window" style={{ width: '320px', maxWidth: '100%' }}>
-        {/* Title bar */}
-        <div className="title-bar">
-          <div className="title-bar-text">Plus Game v1.0</div>
-          <div className="title-bar-controls">
-            <button aria-label="Minimize" />
-            <button aria-label="Maximize" />
-            <button aria-label="Close" />
+    <>
+      <div
+        className="flex items-center justify-center"
+        style={{ minHeight: "100vh", padding: "16px" }}
+      >
+        <div className="window" style={{ width: "320px", maxWidth: "100%" }}>
+          {/* Title bar */}
+          <div className="title-bar">
+            <div className="title-bar-text">Plus Game v1.0</div>
           </div>
-        </div>
 
-        {/* Scores toolbar */}
-        <div className="window-body" style={{ padding: '4px 8px', borderBottom: '1px solid #888', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.8rem' }}>
-            Score: <strong>{state.score}</strong>
-          </span>
-          <span style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Trophy size={14} />
-            Best: <strong>{state.highScore}</strong>
-          </span>
-        </div>
-
-        {/* Main game body */}
-        <div className="window-body" style={{ padding: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <span style={{ fontSize: '0.75rem' }}>
-              Record: {state.recordTime.toFixed(1)}s
+          {/* Scores toolbar */}
+          <div
+            className="window-body"
+            style={{
+              padding: "4px 1px",
+              borderBottom: "1px solid #888",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span style={{ fontSize: "0.8rem" }}>
+              Score: <strong>{state.score}</strong>
             </span>
-            <button
-              onClick={togglePause}
-              disabled={!state.isActive || state.timeLeft <= 0}
-              style={{ fontSize: '0.75rem', minWidth: '68px' }}
-            >
-              {state.isPaused ? 'Resume' : 'Pause'}
-            </button>
-          </div>
-
-          {/* Display area */}
-          <Display
-            numbers={state.numbers}
-            timeLeft={state.timeLeft}
-            totalTime={ROUND_DURATION}
-            input={state.input}
-            feedback={state.feedback}
-            isPaused={state.isPaused}
-          />
-
-          {/* Feedback message */}
-          {state.feedback && (
-            <div
-              className="text-center my-1"
+            <span
               style={{
-                fontSize: '0.9rem',
-                fontWeight: 'bold',
-                color:
-                  state.feedback === 'correct'
-                    ? 'green'
-                    : 'red',
+                fontSize: "0.8rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
               }}
             >
-              {state.feedback === 'correct'
-                ? '✓ Correct!'
-                : state.feedback === 'timeout'
-                  ? `⏱ Time! Answer was ${correct}`
-                  : `✗ Wrong! Answer was ${correct}`}
-            </div>
-          )}
-
-          {/* Keypad */}
-          <div className="mt-2">
-            <Keypad onKey={handleKey} disabled={!state.isActive || state.isPaused} />
+              <Trophy size={14} />
+              Best: <strong>{state.highScore}</strong>
+            </span>
           </div>
 
-          {/* Manual next round after any completed round */}
-          {state.isWaitingForNext && (
+          {/* Main game body */}
+          <div className="window-body" style={{ padding: "8px" }}>
+            {/* Record / streak / pause row */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "6px",
+              }}
+            >
+              <span style={{ fontSize: "0.75rem" }}>
+                Record: {state.recordTime.toFixed(1)}s
+                {state.streak > 0 && (
+                  <span
+                    style={{
+                      marginLeft: "6px",
+                      color:
+                        state.streak >= 10
+                          ? "#a000a0"
+                          : state.streak >= 5
+                            ? "#0055cc"
+                            : "#cc7700",
+                      fontWeight: "bold",
+                    }}
+                  ></span>
+                )}
+              </span>
+              <button
+                onClick={togglePause}
+                disabled={
+                  !state.isActive || state.timeLeft <= 0 || !!pendingReward
+                }
+                style={{ fontSize: "0.75rem", minWidth: "68px" }}
+              >
+                {state.isPaused ? "Resume" : "Pause"}
+              </button>
+            </div>
+
+            <Display
+              numbers={state.numbers}
+              timeLeft={state.timeLeft}
+              totalTime={ROUND_DURATION}
+              input={state.input}
+              feedback={state.feedback}
+              isPaused={isTimerPaused}
+              answer={correct}
+            />
+
+            <div className="mt-2">
+              <Keypad
+                onKey={handleKey}
+                disabled={!state.isActive || state.isPaused || !!pendingReward}
+              />
+            </div>
             <div className="flex justify-center mt-2">
               <button
                 onClick={startRound}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "0.8rem",
+                }}
               >
                 Next Round
               </button>
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Status bar */}
-        <div className="status-bar">
-          <p className="status-bar-field" style={{ fontSize: '0.75rem' }}>
-            {state.isPaused
-              ? 'Paused'
-              : state.isWaitingForNext
-                ? 'Round complete. Click Next Round or press Space to continue.'
-                : state.isActive
-                  ? 'Round in progress…'
-                  : 'Waiting for next round…'}
-          </p>
-          <p className="status-bar-field" style={{ fontSize: '0.75rem' }}>
-            Add all 4 numbers and enter the sum
-          </p>
+          {/* Status bar */}
+          <div
+            className="status-bar"
+            style={{ minHeight: "52px", flexDirection: "column" }}
+          >
+            <p
+              className="status-bar-field"
+              style={{ fontSize: "0.75rem", whiteSpace: "normal" }}
+            >
+              {pendingReward
+                ? `🎉 New theme unlocked: ${pendingReward.name}!`
+                : state.isPaused
+                  ? "Paused"
+                  : state.isWaitingForNext
+                    ? "Round complete!"
+                    : state.isActive
+                      ? "Round in progress…"
+                      : "Waiting for next round…"}
+            </p>
+            <p
+              className="status-bar-field"
+              style={{
+                fontSize: "0.75rem",
+                whiteSpace: "normal",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "4px",
+              }}
+            >
+              <span>
+                {activeTheme.id !== "win98"
+                  ? `Theme: ${activeTheme.name}`
+                  : "Add all 4 numbers and enter the sum"}
+              </span>
+              {maxTheme.unlockStreak > 0 && (
+                <button
+                  onClick={() => setShowThemeSwitcher(true)}
+                  disabled={!!pendingReward}
+                  title="Switch theme"
+                  style={{
+                    fontSize: "0.7rem",
+                    minWidth: "unset",
+                    padding: "0 5px",
+                    height: "18px",
+                    lineHeight: 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  {themeIcon}
+                </button>
+              )}
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+
+      {showThemeSwitcher && (
+        <ThemeSwitcherDialog
+          activeThemeId={activeTheme.id}
+          maxTheme={maxTheme}
+          onSelect={(id) => {
+            applyTheme(id);
+            setShowThemeSwitcher(false);
+          }}
+          onClose={() => setShowThemeSwitcher(false)}
+        />
+      )}
+
+      {pendingReward && (
+        <ThemeRewardDialog
+          theme={pendingReward}
+          onApply={handleApplyReward}
+          onDismiss={handleDismissReward}
+        />
+      )}
+    </>
   );
 };
 
