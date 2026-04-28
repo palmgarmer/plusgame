@@ -5,9 +5,10 @@ import Display from "./components/Display";
 import Keypad from "./components/Keypad";
 import ThemeRewardDialog from "./components/ThemeRewardDialog";
 import ThemeSwitcherDialog from "./components/ThemeSwitcherDialog";
+import SummaryDialog from "./components/SummaryDialog";
 import { useTimer } from "./hooks/useTimer";
 import { useTheme } from "./hooks/useTheme";
-import type { GameState, FeedbackState } from "./types";
+import type { GameState, FeedbackState, StreakSummary } from "./types";
 import { getThemeForStreak, type ThemeDefinition } from "./themes";
 
 // ---------- constants ----------
@@ -68,6 +69,13 @@ const App: React.FC = () => {
   // Theme switcher dialog
   const [showThemeSwitcher, setShowThemeSwitcher] = useState(false);
 
+  // Summary dialog: shown after a losing round if streak was > 0
+  const [streakSummary, setStreakSummary] = useState<StreakSummary | null>(null);
+
+  // Total elapsed time across the current streak, including the failed round.
+  // This avoids race conditions between render timing and performance.now().
+  const streakElapsedRef = useRef(0);
+
   // Track the highest streak threshold we've already rewarded (seed from max unlocked)
   const lastTriggeredStreakRef = useRef(maxTheme.unlockStreak);
 
@@ -77,8 +85,11 @@ const App: React.FC = () => {
   // Round management
   // -----------------------------------------------------------------------
 
-  const startRound = useCallback(() => {
+  const startRound = useCallback((resetScore = false) => {
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    if (resetScore) {
+      streakElapsedRef.current = 0;
+    }
     setState((prev) => ({
       ...prev,
       numbers: generateNumbers(),
@@ -89,6 +100,7 @@ const App: React.FC = () => {
       isPaused: false,
       isWaitingForNext: false,
       roundId: prev.roundId + 1,
+      ...(resetScore ? { score: 0, recordTime: 0 } : {}),
     }));
   }, []);
 
@@ -100,6 +112,22 @@ const App: React.FC = () => {
       const timeUsed = ROUND_DURATION - prev.timeLeft;
       const newRecordTime = isCorrect ? prev.recordTime + timeUsed : 0;
       const newStreak = isCorrect ? prev.streak + 1 : 0;
+      const streakTimeBeforeRound = prev.streak === 0 ? 0 : streakElapsedRef.current;
+      const streakTimeAfterRound = streakTimeBeforeRound + timeUsed;
+
+      // Show summary when the player loses and had an active streak
+      if (!isCorrect && prev.streak > 0) {
+        setStreakSummary({
+          streak: prev.streak,
+          totalTime: parseFloat(streakTimeAfterRound.toFixed(1)),
+          failedNumbers: prev.numbers,
+          failedAnswer: prev.numbers.reduce((a, b) => a + b, 0),
+          failReason: fb as 'wrong' | 'timeout',
+        });
+      }
+
+      streakElapsedRef.current = isCorrect ? streakTimeAfterRound : 0;
+
       return {
         ...prev,
         isActive: false,
@@ -160,7 +188,7 @@ const App: React.FC = () => {
   }, [resolveRound, state.input, state.numbers]);
 
   const isTimerPaused =
-    state.isPaused || pendingReward !== null || showThemeSwitcher;
+    state.isPaused || pendingReward !== null || showThemeSwitcher || streakSummary !== null;
 
   useTimer(
     ROUND_DURATION,
@@ -189,7 +217,8 @@ const App: React.FC = () => {
         !state.isActive ||
         state.isPaused ||
         pendingReward ||
-        showThemeSwitcher
+        showThemeSwitcher ||
+        streakSummary
       )
         return;
 
@@ -224,6 +253,7 @@ const App: React.FC = () => {
       resolveRound,
       pendingReward,
       showThemeSwitcher,
+      streakSummary,
     ],
   );
 
@@ -231,6 +261,12 @@ const App: React.FC = () => {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (streakSummary) {
+          e.preventDefault();
+          setStreakSummary(null);
+          startRound(true);
+          return;
+        }
         if (pendingReward) {
           e.preventDefault();
           handleDismissReward();
@@ -245,7 +281,7 @@ const App: React.FC = () => {
 
       if (e.code === "Space") {
         e.preventDefault();
-        if (pendingReward || showThemeSwitcher) return;
+        if (pendingReward || showThemeSwitcher || streakSummary) return;
         if (state.isWaitingForNext && !state.isActive) {
           startRound();
           return;
@@ -282,6 +318,7 @@ const App: React.FC = () => {
     pendingReward,
     handleDismissReward,
     showThemeSwitcher,
+    streakSummary,
   ]);
 
   useEffect(() => {
@@ -398,7 +435,7 @@ const App: React.FC = () => {
             </div>
             <div className="flex justify-center mt-2">
               <button
-                onClick={startRound}
+                onClick={() => startRound()}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -485,6 +522,16 @@ const App: React.FC = () => {
           theme={pendingReward}
           onApply={handleApplyReward}
           onDismiss={handleDismissReward}
+        />
+      )}
+
+      {streakSummary && (
+        <SummaryDialog
+          summary={streakSummary}
+          onClose={() => {
+            setStreakSummary(null);
+            startRound(true);
+          }}
         />
       )}
     </>

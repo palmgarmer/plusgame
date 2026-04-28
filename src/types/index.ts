@@ -45,3 +45,17 @@ export interface KeypadProps {
   onKey: (key: string) => void;
   disabled: boolean;
 }
+
+/** Data captured at the end of a failed streak, shown in the summary dialog */
+export interface StreakSummary {
+  /** Number of correct answers in the streak */
+  streak: number;
+  /** Total elapsed seconds from first question to game over */
+  totalTime: number;
+  /** The 4 numbers of the question they failed on */
+  failedNumbers: number[];
+  /** The correct answer for that question */
+  failedAnswer: number;
+  /** Whether they timed out or entered a wrong answer */
+  failReason: 'wrong' | 'timeout';
+}
