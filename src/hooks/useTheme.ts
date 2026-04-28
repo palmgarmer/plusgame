@@ -64,10 +64,22 @@ export function useTheme() {
     [maxThemeId],
   );
 
+  const unlockTheme = useCallback(
+    (id: ThemeId) => {
+      const newThemeDef = THEMES.find((t) => t.id === id)!;
+      const maxThemeDef = THEMES.find((t) => t.id === maxThemeId)!;
+      if (newThemeDef.unlockStreak > maxThemeDef.unlockStreak) {
+        saveMaxThemeId(id);
+        setMaxThemeId(id);
+      }
+    },
+    [maxThemeId],
+  );
+
   const activeTheme: ThemeDefinition = THEMES.find((t) => t.id === activeThemeId)!;
   const maxTheme: ThemeDefinition = THEMES.find((t) => t.id === maxThemeId)!;
 
-  return { activeTheme, maxTheme, applyTheme };
+  return { activeTheme, maxTheme, applyTheme, unlockTheme };
 }
 
 // ---------------------------------------------------------------------------

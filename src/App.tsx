@@ -58,7 +58,7 @@ const App: React.FC = () => {
   const [state, setState] = useState<GameState>(initialState);
 
   // Theme system
-  const { activeTheme, maxTheme, applyTheme } = useTheme();
+  const { activeTheme, maxTheme, applyTheme, unlockTheme } = useTheme();
 
   // Reward dialog state: null = hidden, else the theme to preview
   const [pendingReward, setPendingReward] = useState<ThemeDefinition | null>(
@@ -140,8 +140,9 @@ const App: React.FC = () => {
   }, [pendingReward, applyTheme]);
 
   const handleDismissReward = useCallback(() => {
+    if (pendingReward) unlockTheme(pendingReward.id);
     setPendingReward(null);
-  }, []);
+  }, [pendingReward, unlockTheme]);
 
   // -----------------------------------------------------------------------
   // Timer
@@ -311,18 +312,13 @@ const App: React.FC = () => {
           {/* Title bar */}
           <div className="title-bar">
             <div className="title-bar-text">Plus Game v1.0</div>
-            {/* <div className="title-bar-controls">
-              <button aria-label="Minimize" />
-              <button aria-label="Maximize" />
-              <button aria-label="Close" />
-            </div> */}
           </div>
 
           {/* Scores toolbar */}
           <div
             className="window-body"
             style={{
-              padding: "4px 8px",
+              padding: "4px 1px",
               borderBottom: "1px solid #888",
               display: "flex",
               justifyContent: "space-between",
@@ -447,7 +443,7 @@ const App: React.FC = () => {
             >
               <span>
                 {activeTheme.id !== "win98"
-                  ? `Theme: ${activeTheme.name} • Max: ${maxTheme.name}`
+                  ? `Theme: ${activeTheme.name}`
                   : "Add all 4 numbers and enter the sum"}
               </span>
               {maxTheme.unlockStreak > 0 && (
